@@ -1,0 +1,60 @@
+# === ROS 2 / colcon build files ===
+build/
+install/
+log/
+
+# === Python cache ===
+__pycache__/
+*.py[cod]
+*.so
+
+# === CMake files ===
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# === ROS 2 launch/logs ===
+*.launch.py~
+*.log
+*.db3
+
+# === Packages ===
+*.egg-info/
+*.rosinstall
+
+# === Editor & OS metadata ===
+*.swp
+*.swo
+.DS_Store
+.idea/
+.vscode/
+*.code-workspace
+
+# === Compiled C++ objects ===
+*.o
+*.a
+*.out
+*.obj
+*.gch
+
+# === Python venvs (if used) ===
+venv/
+.env/
+
+# === Docker ===
+*.dockerfile
+*.container
+docker-compose.override.yml
+.env.docker
+
+# === Misc ===
+tags
+TAGS
+
+colcon.meta
+ros2_ws/devel/
+*.bag
+*.bag.active
+*.bag.metadata
+*.bag.db3
