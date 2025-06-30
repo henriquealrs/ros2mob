@@ -7,6 +7,8 @@ from sensor_msgs.msg import LaserScan
 from transforms3d.euler import euler2quat, quat2euler
 import numpy as np
 import math
+from tf2_ros import TransformBroadcaster
+from geometry_msgs.msg import TransformStamped
 
 class State:
     def __init__(self):
@@ -22,11 +24,11 @@ class State:
 class SimulateBot(Node):
     def __init__(self):
         super().__init__('simulate_bot')
-        self.get_logger().info('Simulation Node Started')
+        # self.get_logger().info('Simulation Node Started')
 
         # Publishers
-        self.odom_pub = self.create_publisher(Odometry, '/odom', 10)
-        self.lidar_pub = self.create_publisher(LaserScan, '/scan', 10)
+        self.odom_pub = self.create_publisher(Odometry, 'odom', 10)
+        self.lidar_pub = self.create_publisher(LaserScan, 'scan', 10)
 
         # Subscriber to velocity command
         self.cmd_sub = self.create_subscription(
@@ -38,9 +40,12 @@ class SimulateBot(Node):
         # Timer for updates
         self.last_time = self.get_clock().now()
         self.timer = self.create_timer(0.1, self.update)
+        self.tf_broadcaster = TransformBroadcaster(self)
+
 
     def cmd_vel_callback(self, msg: Twist):
-        self.vel = np.array([[msg.linear], [msg.angular]])
+        self.get_logger().info(f"Received twist {msg.linear} {msg.angular}")
+        self.state.velocity = np.array([msg.linear.x, msg.angular.z])
 
     def update(self):
         now = self.get_clock().now()
@@ -48,6 +53,22 @@ class SimulateBot(Node):
         self.state.update_state(dt)
         self.publish_odometry(now)
         self.publish_fake_lidar(now)
+        self.send_to_baselink(now)
+
+    def send_to_baselink(self, now: Time):
+        tf = TransformStamped()
+        tf.header.stamp = now.to_msg()
+        tf.header.frame_id = "odom"
+        tf.child_frame_id = "base_link"
+        tf.transform.translation.x = float(self.state.state[0])
+        tf.transform.translation.y = float(self.state.state[1])
+        tf.transform.translation.z = 0.0
+        q = euler2quat(0, 0, float(self.state.state[2]))
+        tf.transform.rotation.x = q[0]
+        tf.transform.rotation.y = q[1]
+        tf.transform.rotation.z = q[2]
+        tf.transform.rotation.w = q[3]
+        self.tf_broadcaster.sendTransform(tf)
 
     def publish_odometry(self, now: Time):
         odo = Odometry()
@@ -55,9 +76,9 @@ class SimulateBot(Node):
         odo.header.frame_id = 'odom'
         odo.child_frame_id = 'base_link'
         self.get_logger().info(f"----\n{self.state.state}\n------")
-        odo.pose.pose.position.x = self.state.state[0]
-        odo.pose.pose.position.y = self.state.state[1]
-        q = euler2quat(0, 0, self.state.state[2])
+        odo.pose.pose.position.x = float(self.state.state[0])
+        odo.pose.pose.position.y = float(self.state.state[1])
+        q = euler2quat(0, 0, float(self.state.state[2]))
         odo.pose.pose.orientation.w = q[0]
         odo.pose.pose.orientation.x = q[1]
         odo.pose.pose.orientation.y = q[2]
