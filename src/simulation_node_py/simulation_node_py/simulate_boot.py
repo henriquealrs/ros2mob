@@ -9,16 +9,40 @@ import numpy as np
 import math
 from tf2_ros import TransformBroadcaster
 from geometry_msgs.msg import TransformStamped
+# from scipy.spatial.transform import Rotation
+
 
 class State:
     def __init__(self):
-        self.state = np.zeros(3, dtype=np.float32)
+        self.pose = np.zeros(3, dtype=np.float32)
         self.velocity = np.zeros(2)
+        pass
+
+
+class Simulation:
+    def __init__(self):
+        self.accel = np.zeros(2)
+        self.state = State()
 
     def update_state(self, dt: float) -> None:
-        dx = dt * np.array([self.velocity[0] * np.cos(self.state[2]),
-                           self.velocity[0] * np.sin(self.state[2]), self.velocity[1]])
-        self.state = self.state + dx
+        pose = self.state.pose
+        vel = self.state.velocity
+        # rot_mat = Rotation.from_euler('z', [pose[2]]).as_matrix()[:2, :2]
+        d_long_v = self.accel[0] * dt
+        d_long = dt * (vel[0] + 0.5 * d_long_v)
+
+        d_ang_v = self.accel[1] * dt
+        d_ang = dt * (vel[0] + 0.5 * d_ang_v)
+
+        vel[0] += d_long_v
+        vel[1] += d_ang_v
+        pose[:2] += d_long * np.array([np.cos(pose[2]), np.sin(pose[2])])
+        pose[2] += d_ang
+
+
+    def set_command_accel(self, lin_acc: float, ang_acc: float) -> None:
+        self.accel[0] = lin_acc
+        self.accel[1] = ang_acc
 
 
 class SimulateBot(Node):
@@ -32,10 +56,10 @@ class SimulateBot(Node):
 
         # Subscriber to velocity command
         self.cmd_sub = self.create_subscription(
-            Twist, '/cmd_vel', self.cmd_vel_callback, 10)
+            Twist, '/cmd_acc', self.cmd_acc_callback, 10)
 
         # Internal state
-        self.state = State()
+        self.sim = Simulation()
 
         # Timer for updates
         self.last_time = self.get_clock().now()
@@ -43,14 +67,13 @@ class SimulateBot(Node):
         self.tf_broadcaster = TransformBroadcaster(self)
 
 
-    def cmd_vel_callback(self, msg: Twist):
+    def cmd_acc_callback(self, msg: Twist):
         self.get_logger().info(f"Received twist {msg.linear} {msg.angular}")
-        self.state.velocity = np.array([msg.linear.x, msg.angular.z])
 
     def update(self):
         now = self.get_clock().now()
         dt = (now - self.last_time).nanoseconds / 1e9
-        self.state.update_state(dt)
+        self.sim.update_state(dt)
         self.publish_odometry(now)
         self.publish_fake_lidar(now)
         self.send_to_baselink(now)
@@ -60,10 +83,11 @@ class SimulateBot(Node):
         tf.header.stamp = now.to_msg()
         tf.header.frame_id = "odom"
         tf.child_frame_id = "base_link"
-        tf.transform.translation.x = float(self.state.state[0])
-        tf.transform.translation.y = float(self.state.state[1])
+        pose = self.sim.state.pose
+        tf.transform.translation.x = float(pose[0])
+        tf.transform.translation.y = float(pose[1])
         tf.transform.translation.z = 0.0
-        q = euler2quat(0, 0, float(self.state.state[2]))
+        q = euler2quat(0, 0, float(pose[2]))
         tf.transform.rotation.x = q[0]
         tf.transform.rotation.y = q[1]
         tf.transform.rotation.z = q[2]
@@ -75,10 +99,11 @@ class SimulateBot(Node):
         odo.header.stamp = now.to_msg()
         odo.header.frame_id = 'odom'
         odo.child_frame_id = 'base_link'
-        self.get_logger().info(f"----\n{self.state.state}\n------")
-        odo.pose.pose.position.x = float(self.state.state[0])
-        odo.pose.pose.position.y = float(self.state.state[1])
-        q = euler2quat(0, 0, float(self.state.state[2]))
+        pose = self.sim.state.pose
+        self.get_logger().info(f"----\n{pose}\n------")
+        odo.pose.pose.position.x = float(pose[0])
+        odo.pose.pose.position.y = float(pose[1])
+        q = euler2quat(0, 0, float(pose[2]))
         odo.pose.pose.orientation.w = q[0]
         odo.pose.pose.orientation.x = q[1]
         odo.pose.pose.orientation.y = q[2]

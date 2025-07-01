@@ -8,7 +8,7 @@ import pytest
 class TestNode(Node):
     def __init__(self):
         super().__init__("test_sim")
-        self.pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.pub = self.create_publisher(Twist, '/cmd_acc', 10)
         self.simulation = SimulateBot()
 
     def publish(self, vel: np.ndarray) -> None:

@@ -58,3 +58,5 @@ ros2_ws/devel/
 *.bag.active
 *.bag.metadata
 *.bag.db3
+
+**/compile_commands.json
